@@ -1,0 +1,9 @@
+FROM python
+
+WORKDIR /simple_worker
+
+COPY . .
+
+RUN pip install -r requirements.txt
+
+ENTRYPOINT celery -A tasks worker --loglevel=info

@@ -1,0 +1,24 @@
+version: "3.8"
+services:
+  flask-app:
+    build: './flask-app'
+    environment:
+      - REDIS_URL=redis
+      - REDIS_PORT=6379
+    ports:
+      - "5000:5000"
+    depends_on:
+      - redis
+
+  celery_worker:
+    build: './celery-worker'
+    user: nobody
+    depends_on:
+      - redis
+      - flask-app
+
+
+  redis:
+    image: redis
+    ports:
+      - '6379:6379'
