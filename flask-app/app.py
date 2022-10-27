@@ -1,35 +1,18 @@
 from flask import Flask, render_template, request, send_from_directory
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.sql import func
 import os
-from celery import Celery
-
+from mongo_client import MongoClient
 
 UPLOAD_FOLDER = './users_files'
 app = Flask(__name__)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///testdb.sqlite3'
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config.update(CELERY_CONFIG={
-    'broker_url': 'redis://172.18.0.2:6379/0',
-    'result_backend': 'redis://172.18.0.2:6379/0',
-})
-db = SQLAlchemy(app)
+
+db = MongoClient()
 
 
-celery = Celery(
-    __name__,
-    broker="redis://172.18.0.2:6379/0",
-    backend="redis://172.18.0.2:6379/0"
-)
-
-
-class Link(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    date = db.Column(db.DateTime(timezone=True), default=func.now())
-    link = db.Column(db.String(150), unique=True)
-    file_path = db.Column(db.String(150), unique=True)
+def generate_link(file_id: int) -> str:
+    return f"{file_id}-kappa"
 
 
 @app.route('/', methods=["POST", "GET"])
@@ -37,21 +20,26 @@ def home():
     if request.method == 'POST':
         file = request.files['files']
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        print(db.find_last_doc_id())
+        file_id = db.find_last_doc_id() + 1
+        link = generate_link(file_id)
+        db.insert(file_id, link, file.filename)
         file.save(file_path)
-    # celery.send_task('tasks.longtime_add', kwargs={'x': 1, 'y': 2})
+        return render_template('index.html', file_link=link)
     return render_template('index.html')
 
 
-@app.route('/files/<filename>')
-def load_file(filename):
-    print(filename)
+@app.route('/files/<link>')
+def load_file(link):
+    file_path = db.find_path(link)
+
     return send_from_directory(app.config['UPLOAD_FOLDER'],
-                               path=filename,
+                               path=file_path,
                                as_attachment=True
                                )
 
 
 if __name__ == '__main__':
-    app.run()
+    app.run(host='0.0.0.0')
 
 
